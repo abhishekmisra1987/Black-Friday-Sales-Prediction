@@ -1,0 +1,81 @@
+setwd("C:\\Users\\Emfsupport.kwb1\\Downloads\\Analytics Vidya\\Black Friday sales")
+train_data=read.csv("train.csv",stringsAsFactors = F)
+test_data=read.csv("test.csv",stringsAsFactors = F)
+train_data$data="train"
+test_data$data="test"
+test_data$Purchase=NA
+train_data$Product_Category_2[is.na(train_data$Product_Category_2)]=median(train_data$Product_Category_2,na.rm = T)
+test_data$Product_Category_2[is.na(test_data$Product_Category_2)]=median(test_data$Product_Category_2,na.rm = T)
+Bf_sales=rbind(train_data,test_data)
+library(dplyr)
+glimpse(Bf_sales)
+lapply(Bf_sales, function(x) sum(is.na(x)))
+table(Bf_sales$Gender)
+Bf_sales$Gender=ifelse(Bf_sales$Gender=="M",1,0)
+glimpse(Bf_sales)
+table(Bf_sales$Age)
+mean1=function(x){
+  z=mean(x,na.rm = T)
+  return(z)
+}
+sort(round(tapply(Bf_sales$Purchase,Bf_sales$Age,mean1),0))
+Bf_sales2=Bf_sales %>% 
+  mutate(Age1=as.numeric(Age %in% c("0-17")),
+         Age2=as.numeric(Age %in% c("46-50","26-35")),
+         Age3=as.numeric(Age %in% c("36-45","55+")),
+         Age4=as.numeric(Age %in% c("51-55"))) %>% 
+  select(-Age)
+glimpse(Bf_sales2)
+sort(round(tapply(Bf_sales2$Purchase,Bf_sales2$Occupation,mean1),0))
+Bf_sales3=Bf_sales2 %>% 
+  mutate(occu1=as.numeric(Occupation %in% c("9","19","20","2","1","10")),
+         occu2=as.numeric(Occupation %in% c("0","18","3","4","11","6")),
+         occu3=as.numeric(Occupation %in% c("13","5","16","7","14","8"))) %>% 
+  select(-Occupation)
+glimpse(Bf_sales3)
+table(Bf_sales3$City_Category)
+Bf_sales4=Bf_sales3 %>% 
+  mutate(city_B=as.numeric(City_Category %in% "B"),
+         City_c=as.numeric(City_Category %in% "c")) %>% 
+  select(-City_Category)
+glimpse(Bf_sales4)
+table(Bf_sales4$Stay_In_Current_City_Years)
+Bf_sales4$Stay_In_Current_City_Years=as.numeric(ifelse(Bf_sales4$Stay_In_Current_City_Years=="4+",4,Bf_sales4$Stay_In_Current_City_Years))
+glimpse(Bf_sales4)
+table(Bf_sales4$Marital_Status)
+summary(Bf_sales4)
+glimpse(Bf_sales4)
+# check if there are any missing values 
+lapply(Bf_sales4,function(x) sum(is.na(x)))
+####devide train and test data
+train_data=Bf_sales4 %>% 
+  filter(data=="train") %>% 
+  select(-data)
+test_data=Bf_sales4 %>% 
+  filter(data=="test") %>% 
+  select(-data,-Purchase)
+glimpse(train_data)
+glimpse(test_data)
+
+###creating validation data set###
+set.seed(3)
+s=sample(1:nrow(train_data),0.75*nrow(train_data))
+data1=train_data[s,]
+data2=train_data[-s,]
+
+### apply xgboost#####
+library(xgboost)
+x_train=train_data %>% 
+  select(-Purchase)
+y_train=train_data$Purchase
+x_test=test_data 
+xgb.fit=xgboost(data = data.matrix(x_train),
+                label = y_train,
+                objective="reg:linear",
+                verbose = 1,
+                nrounds = 21)
+xgb.predicted=predict(xgb.fit,data.matrix(x_test))
+rmse=sqrt(mean((xgb.predicted-data2$Purchase)**2))
+mape=mean(abs((xgb.predicted-data2$Purchase)/data2$Purchase))
+write.csv(xgb.predicted,"myprediction.csv",row.names = F)
+
